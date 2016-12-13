@@ -1,0 +1,356 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="http://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        $(function(){
+            var iosocket = io.connect();
+            iosocket.on('connect', function () {
+                $('#incomingChatMessages').append($('<li>Connected</li>'));
+                iosocket.on('message', function(message) {
+					otherGameDraw(message);
+                });
+                iosocket.on('disconnect', function() {
+                    $('#incomingChatMessages').append('<li>Disconnected</li>');
+                });
+            });
+			var key_down=0;
+			var game_json={};
+			var my_game_time=0;
+			var my_position={};
+			var my_face=1;/*面向1，2，3，4上下左右*/
+			var my_blood=10;
+			var my_id=0;
+			var my_on=1;
+			var my_level=1;
+			/*子弹对象*/
+			function game_shot(){
+			this.class='game_shot';
+			this.v=15;/*速度*/
+            this.r=5;/*半径*/
+			this.d=1;/*1，2，3，4上下左右*/
+			this.x=0;
+			this.y=0;
+			}
+			var tmp_shot=new game_shot();
+			
+			/*向服务器发送信息*/
+			function mySendMsg(type){
+			if(type==1){
+			game_json={"on":my_on,"id":my_id,"pos":my_position,"face":my_face,"blood":my_blood,"level":my_level};
+			}else{
+			game_json={"on":my_on,"kp":event.which,"id":my_id,"pos":my_position,"face":my_face,"blood":my_blood,"level":my_level};
+			}
+			
+            iosocket.send(game_json);
+			}
+			
+			/*信息发送到服务器*/
+			$('body').keyup(function(){key_down=0;});
+            $('body').keydown(function(event) {
+                    event.preventDefault();
+					my_position={"x1":$("#js-mine").position().left,"y1":$("#js-mine").position().top};
+					mySendMsg();
+					myGameDraw(event);
+					key_down=1;
+            });
+			
+			window.onbeforeunload = function() {
+			my_on=0;
+			mySendMsg();
+            }
+			
+			/*游戏客户端ID初始化*/
+			function gameIni(){
+			var tmp_id=prompt("输入你的ID");
+			if(tmp_id){
+			$("#js-game-id").val(tmp_id);
+			}else{
+			$("#js-game-id").val("Jeremy"+Math.ceil(Math.random()*1000));
+			}
+			my_id=$("#js-game-id").val();
+			my_position={"x1":$("#js-mine").position().left,"y1":$("#js-mine").position().top};
+			mySendMsg();
+			}
+			
+			
+			function myBloodDraw(blood_num){
+			    $("#js-my-blood").html('');
+				if(blood_num==0){window.location.reload();};
+				for(n=0;n<blood_num;n++){
+				$("#js-my-blood").append('<div class="game-blood-num"></div>');
+				}
+			} 
+			
+			/*上119 下115 左97 右100 J106 K107 L108*/
+			/*-------------------------------------------------绘制我的内容-------------------------------------------------*/
+			function myGameDraw(event){
+			/*飞机*/
+			$("#js-mine").removeClass("d1 d2 d3 d4");
+			switch(event.which){
+			case 119:case 87:
+			$("#js-mine").css("transform","translate("+$("#js-mine").position().left+"px,"+$("#js-mine").position().top-5+"px)");
+			my_face=1;
+			break;
+			case 115:case 83:
+			$("#js-mine").css("transform","translate("+$("#js-mine").position().left+"px,"+$("#js-mine").position().top+5+"px)");
+			my_face=2;
+			break;
+			case 97:case 65:
+			$("#js-mine").css("transform","translate("+$("#js-mine").position().left-5+"px,"+$("#js-mine").position().top+"px)");
+			my_face=3;
+			break;
+			case 100:case 68:
+			$("#js-mine").css("transform","translate("+$("#js-mine").position().left+5+"px,"+$("#js-mine").position().top+"px)");
+			my_face=4;
+			break;
+			case 106:case 74:
+			if(key_down==0){
+			drawShot($("#js-mine"),my_face,my_level);
+			}
+			break;
+			case 107:break;
+			case 108:break;
+			}
+			$("#js-mine").addClass("d"+my_face);
+			/*我的id*/
+			$("#js-my-name").css({"top":$("#js-mine").position().top+20+"px","left":$("#js-mine").position().left+20+"px"}).html(my_id);
+			/*血条*/
+			$("#js-my-blood").css({"top":$("#js-mine").position().top+40+"px","left":$("#js-mine").position().left+20+"px"});
+			myBloodDraw(my_blood);
+			
+
+			}
+			
+			/*绘制子弹 发弹对象  方向*/
+			function drawShot(obj,face,level){
+				tmp_shot.x=obj.position().left+parseInt(obj.css("width"))/2;
+				tmp_shot.y=obj.position().top+parseInt(obj.css("height"))/2;
+				tmp_shot.d=face;
+				$("#js-game-block").append('<div class="'+tmp_shot.class+'" x="'+tmp_shot.x+'" y="'+tmp_shot.y+'" d="'+tmp_shot.d+'" v="'+tmp_shot.v+'" by="'+obj.attr("id")+'" ></div>');			
+				if(level>1){
+				var tmp_x=0;
+				var tmp_y=0;
+				var tmp_d=0;
+					for(n=1;n<level;n++){
+					tmp_d+=8;
+						if(n%2==1){
+						if(face==1 || face==2){tmp_x=tmp_shot.x-tmp_d;tmp_y=tmp_shot.y;}
+						if(face==3 || face==4){tmp_y=tmp_shot.y-tmp_d;tmp_x=tmp_shot.x;}
+						}else{
+						if(face==1 || face==2){tmp_x=tmp_shot.x+tmp_d;tmp_y=tmp_shot.y;}
+						if(face==3 || face==4){tmp_y=tmp_shot.y+tmp_d;tmp_x=tmp_shot.x;}
+						}
+					$("#js-game-block").append('<div class="'+tmp_shot.class+'" x="'+tmp_x+'" y="'+tmp_y+'" d="'+tmp_shot.d+'" v="'+tmp_shot.v+'" by="'+obj.attr("id")+'" ></div>');	
+					}
+				}
+			}
+			
+			/*存活奖励*/
+			function myReward(gt){
+			if(gt%12==0){putagive();}
+			}
+			
+			/*发放奖励*/
+			function putagive(){
+			var x=parseInt($("#js-game-block").css("width"));
+			var y=parseInt($("#js-game-block").css("height"));
+			x=Math.ceil(Math.random()*x);
+			y=Math.ceil(Math.random()*y);
+			drawUpgradeBox(x,y);
+			var msg_json={"type":1,"x":x,"y":y};
+			iosocket.send(msg_json);
+			}
+			
+			function drawUpgradeBox(x,y){
+			$('<div class="upgrade_box"></div>').css({"left":x,"top":y}).appendTo("#js-game-block");
+			}
+			
+			/*-------------------------------------------------绘制在线其他人的内容-------------------------------------------------*/
+			var tmp_other_obj={};
+			var tmp_other_note={};
+			var tmp_other_blood={};
+			function otherGameDraw(message){
+			/*处理特殊信息*/
+			if(message.type==1){
+			drawUpgradeBox(message.x,message.y);
+			return;
+			}
+			
+			/*去除退出的玩家*/
+			if(message.on==0){
+			$("#"+message.id).remove(); 
+			$("#"+message.id+"-note").remove();
+			$("#"+message.id+"-blood").remove();
+			return;
+			}
+			tmp_other_obj=$("#"+message.id);
+			tmp_other_note=$("#"+message.id+"-note");
+			tmp_other_blood=$("#"+message.id+"-blood");
+			/*绘制其他玩家*/
+			if(tmp_other_obj.size()>0){
+			/*他人战机*/
+			tmp_other_obj.css({"left":message.pos.x1+"px","top":message.pos.y1+"px"});
+			tmp_other_obj.removeClass("d1 d2 d3 d4");
+			tmp_other_obj.addClass("d"+message.face);
+			/*他人id*/
+			tmp_other_note.css({"top":tmp_other_obj.position().top+20+"px","left":tmp_other_obj.position().left+20+"px"}).html(message.id);
+			/*他人血条*/
+			tmp_other_blood.css({"top":tmp_other_obj.position().top+40+"px","left":tmp_other_obj.position().left+20+"px"}).html('');
+			for(n=0;n<message.blood;n++){
+			tmp_other_blood.append('<div class="game-blood-num"></div>');
+			}
+			}else{
+			$("#js-game-block").append('<div id="'+message.id+'-blood" class="game-blood"></div>');
+			$("#js-game-block").append('<div class="game-unit" id="'+message.id+'"></div>');
+			$("#js-game-block").append('<div id="'+message.id+'-note" class="game-note"></div>');
+			}
+			/*绘制子弹*/
+			if(message.kp==106 || message.kp==74){
+			drawShot(tmp_other_obj,message.face,message.level);
+			}
+			}
+			
+			/*-------------------------------------------------全局画布绘制-------------------------------------------------*/
+			var tmp_game_shot={};
+			var tmp_upgrad_box={};
+			function canvasdraw(){
+			 /*子弹*/
+			 $(".game_shot").each(function(){
+			 tmp_game_shot=$(this);
+			 switch(tmp_game_shot.attr("d")){
+			 case "1":tmp_game_shot.attr("y",parseInt(tmp_game_shot.attr("y"))-parseInt(tmp_game_shot.attr("v"))); break; /*上*/
+			 case "2":tmp_game_shot.attr("y",parseInt(tmp_game_shot.attr("y"))+parseInt(tmp_game_shot.attr("v"))); break; /*下*/
+			 case "3":tmp_game_shot.attr("x",parseInt(tmp_game_shot.attr("x"))-parseInt(tmp_game_shot.attr("v"))); break; /*左*/
+			 case "4":tmp_game_shot.attr("x",parseInt(tmp_game_shot.attr("x"))+parseInt(tmp_game_shot.attr("v"))); break; /*右*/
+			 }
+			 tmp_game_shot.css({"top":tmp_game_shot.attr("y"),"left":tmp_game_shot.attr("x")});
+			 
+			 /*超出判断*/
+			 if(isOut($("#js-game-block"),tmp_game_shot)){tmp_game_shot.remove();return true; }
+			 
+			 
+			 /*子弹击中其他机*/
+			 $(".game-unit[id!='js-mine']").each(function(){
+				 if(isTouch(tmp_game_shot,$(this))){
+				 tmp_game_shot.remove();
+				 $("#"+$(this).attr("id")+"-blood").children(".game-blood-num").last().remove();
+				 }
+			 })
+			 
+			 /*子弹击中我*/
+			 if(isTouch(tmp_game_shot,$("#js-mine"))){
+			     tmp_game_shot.remove();
+				 my_blood--;
+				 myBloodDraw(my_blood);
+				 mySendMsg(1);
+			 }
+			 });
+			 /*子弹end*/
+			 
+			 
+			 /*宝箱*/
+			 $(".upgrade_box").each(function(){
+			 tmp_upgrad_box=$(this);
+			 /*其他人拿了宝箱*/
+			 $(".game-unit[id!='js-mine']").each(function(){
+				 if(isTouch(tmp_upgrad_box,$(this))){
+				 tmp_upgrad_box.remove();/*宝箱消失*/
+				 }
+			 })
+			 
+			 /*我拿了宝箱*/
+			 if(isTouch(tmp_upgrad_box,$("#js-mine"))){
+			     tmp_upgrad_box.remove();/*宝箱消失*/
+				 my_level++;
+				 mySendMsg(1);
+			 }
+			 });
+			 /*宝箱end*/
+			 
+			 
+			}
+			/*-------------------------------------------------物理引擎-------------------------------------------------*/
+			/*ge 碰撞判断 圆形*/
+			function isTouch(obj1,obj2){
+			    var x1=parseInt(obj1.offset().left);
+				var y1=parseInt(obj1.offset().top);
+				var x1_width=parseInt(obj1.css("width"));
+				x1=x1+x1_width/2;
+				y1=y1+x1_width/2;
+				var r1=x1_width/2;
+				
+				var x2=parseInt(obj2.offset().left);
+				var y2=parseInt(obj2.offset().top);
+				var x2_width=parseInt(obj2.css("width"));
+				x2=x2+x2_width/2;
+				y2=y2+x2_width/2;
+				var r2=x2_width/2;
+				if(Math.pow((x2-x1),2)+Math.pow((y2-y1),2)<Math.pow((r1+r2),2)){return true;}
+				return false;
+			}
+			
+			/*ge 超出判断  对象1 容器    对象2 物件*/
+			function isOut(obj1,obj2){
+				var x1=parseInt(obj1.offset().left);
+				var y1=parseInt(obj1.offset().top);
+				var x1_width=parseInt(obj1.css("width"));
+				var y1_height=parseInt(obj1.css("height"));
+				
+				var x2=parseInt(obj2.offset().left);
+				var y2=parseInt(obj2.offset().top);
+				var x2_width=parseInt(obj2.css("width"));
+				var y2_height=parseInt(obj2.css("height"));
+				
+				if(x2+x2_width>x1+x1_width || y2+y2_height>y1+y1_height){return true;}
+				if(x2<x1 || y2<y1){return true;}
+				return false;
+			}
+
+			/*数组初始化*/
+			gameIni();
+			/*启动画布*/
+			var playgame=setInterval(function(){
+			canvasdraw();
+			},70);
+			/*游戏时间*/
+			var mygametime=setInterval(function(){
+			my_game_time++;
+			$("#js-my-time").html(my_game_time);
+			myReward(my_game_time);
+			},1000);
+			
+        });
+    </script>
+	<style>
+	#js-game-block{ width:800px; height:600px; margin:0 auto; border:1px solid #ccc; position:relative; overflow:hidden; background:url(http://test.gdtengnan.com/output/img/game_bg1.gif) repeat;}
+	#incomingChatMessages{font-size:12px;width:800px;margin:0 auto; overflow:hidden;}
+	.game-unit{ width:20px; height:20px; position:absolute; background:url(http://test.gdtengnan.com/output/img/plane.gif) no-repeat; background-size:100% 100%;}
+	.game-unit.d1{ }
+	.game-unit.d2{transform:rotate(180deg);-ms-transform:rotate(180deg);-moz-transform:rotate(180deg);-webkit-transform:rotate(180deg);-o-transform:rotate(180deg);}
+	.game-unit.d4{transform:rotate(90deg);-ms-transform:rotate(90deg);-moz-transform:rotate(90deg);-webkit-transform:rotate(90deg);-o-transform:rotate(90deg);}
+	.game-unit.d3{transform:rotate(270deg);-ms-transform:rotate(270deg);-moz-transform:rotate(270deg);-webkit-transform:rotate(270deg);-o-transform:rotate(270deg);}
+	.game-blood{ height:2px;position:absolute;}
+	.game-blood-num{width:2px;height:2px;background:#F00; margin-right:1px; display:inline-block;}
+	.game-note{height:20px; color:#FFF; position:absolute; line-height:20px; font-size:12px;}
+	.game_shot{ width:5px; height:5px; border-radius:45px; background:#FF0; position:absolute;}
+	.clear{ clear:both;}
+	.upgrade_box{width:20px; height:20px;background:url(http://test.gdtengnan.com/output/img/upgrade_box.gif) no-repeat; background-size:100% 100%; position:absolute;}
+	</style>
+</head>
+<body>
+ID:<input id="js-game-id" type="text" value="" readonly="readonly" />
+<span>本应用只支持chrome,safari,ff浏览器</span>
+<span>WASD:上下左右  J:发弹</span>
+<span>生存:<span id="js-my-time"></span>秒</span>
+
+<div id="js-game-block">
+<div class="game-blood" id="js-my-blood"></div>
+<div class="game-unit" id="js-mine"></div>
+<div class="game-note" id="js-my-name"></div>
+</div>
+
+控制台信息:<div id="incomingChatMessages"></div>
+</body>
+</html>
